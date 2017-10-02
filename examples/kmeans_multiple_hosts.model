@@ -1,0 +1,16 @@
+Host a = localhost:10001 4
+Host b = localhost:10002 4
+
+NodeDataFile my_data
+my_data.file = mnist.idx3-ubyte
+my_data @ * [1]
+
+NodeKMeans my_kmeans
+my_kmeans.K = 32
+my_kmeans.epsilon = 0.001
+my_kmeans.verbose = 1
+my_kmeans @ * [10]
+
+my_data -> my_kmeans
+my_kmeans -> my_kmeans
+

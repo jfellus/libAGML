@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="pandoc">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title></title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <!--[if lt IE 9]>
+    <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+  <![endif]-->
+  <style type="text/css">
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #0000ff; }
+code > span.ch { color: #008080; }
+code > span.st { color: #008080; }
+code > span.co { color: #008000; }
+code > span.ot { color: #ff4000; }
+code > span.al { color: #ff0000; }
+code > span.er { font-weight: bold; }
+  </style>
+  <link rel="stylesheet" href="style/a.css">
+</head>
+<body>
+<h1 id="agml-tutorial-1-kmeans-clustering-on-a-single-machine">AGML Tutorial 1 : KMeans clustering on a single machine</h1>
+<p><em>Associed files: examples/kmeans_single_host.model, examples/kmeans_single_host.sh</em></p>
+<p>This tutorial presents how to run a gossip kmeans clustering on a single machine with <r>libAGML</r>.</p>
+<p>As an example, here we'll perform <a href="http://en.wikipedia.org/wiki/K-means_clustering">KMeans clustering</a>, whose objective is to optimize a Vector Quantizer from a set of training vectors. <r>libAGML</r> includes an asynchronous and decentralized implementation of KMeans, presented in <a href="bib.html">[KDCLOUD2013]</a>.</p>
+<h3 id="model-declaration">Model declaration</h3>
+<p>We first have to declare the Model we want to run in a file. This file contains a list of commands that will be executed by the computing server (presented in next section).</p>
+<h4 id="declare-host">Declare host</h4>
+<p>We first declare a local host named <code>a</code> with port <em>10001</em> and a using 4 threads:</p>
+<pre class="sourceCode ini"><code class="sourceCode ini"><span class="dt">Host a </span><span class="ot">=</span><span class="st"> </span><span class="kw">localhost</span><span class="st">:</span><span class="dv">10001</span><span class="st"> </span><span class="dv">4</span></code></pre>
+<h4 id="declare-data-nodes">Declare data nodes</h4>
+<p>Then, we declare a <code>NodeDataFile</code> node called <code>my_data</code>, and set it with the following properties:</p>
+<pre class="sourceCode ini"><code class="sourceCode ini"><span class="dt">NodeDataFile my_data</span>
+<span class="dt">my_data.file </span><span class="ot">=</span><span class="st"> mnist.idx3-ubyte</span>
+<span class="dt">my_data @ a </span><span class="kw">[1]</span></code></pre>
+<p><code>NodeDataFile</code> refers to a C++ class, implemented in files src/agml_toolbox/nodes/data/NodeDataFile.cpp. The computing server will create a <code>NodeGroup</code> using this class, and call it <code>my_data</code>. NB: this first declaration does not create any instance of <code>NodeDataFile</code>, but a model for further instantiations.</p>
+<p>Then, the <code>file</code> property is set to mnist.idx3-ubyte, resulting in the loading of this data file. In a general manner, properties can be set to many objects using the syntax &quot;<em>object name</em>.<em>property name</em> = <em>value</em>&quot;.</p>
+<p>The third declaration &quot;<code>my_data @ a [1]</code>&quot; tells to the computing server that a single instance of <code>NodeDataFile</code> class should be create on host <code>a</code>. Note that it is not relevant to have more than one instance of <code>NodeDataFile</code> class per host, since parallel file I/O used to be inefficient.</p>
+<h4 id="declare-kmeans-nodes">Declare kmeans nodes</h4>
+<p>Next, we declare a <code>NodeKMeans</code> node called <code>my_kmeans</code>, with the following properties. The declaration is very close to the previous one:</p>
+<pre class="sourceCode ini"><code class="sourceCode ini"><span class="dt">NodeKMeans my_kmeans</span>
+<span class="dt">my_kmeans.K </span><span class="ot">=</span><span class="st"> </span><span class="dv">32</span>
+<span class="dt">my_kmeans.epsilon </span><span class="ot">=</span><span class="st"> </span><span class="fl">0.1</span>
+<span class="dt">my_kmeans.verbose </span><span class="ot">=</span><span class="st"> </span><span class="dv">1</span>
+<span class="dt">my_kmeans @ a </span><span class="kw">[10]</span></code></pre>
+<p>In that case we set 3 properties: <code>K</code> is the number of clusters, <code>epsilon</code> the stopping criterion (i.e. MSE relative difference between two iterations), and <code>verbose</code> the verbose level (higher values will lead to more printed informations).</p>
+<p>The final declaration &quot;<code>my_kmeans @ a [10]</code>&quot; ask for the creation of 10 instances on host <code>a</code>.</p>
+<h4 id="declare-nodes-connections">Declare nodes connections</h4>
+<p>Finally, we declare the connections between our nodes:</p>
+<pre class="sourceCode ini"><code class="sourceCode ini"><span class="dt">my_data -&gt; my_kmeans</span>
+<span class="dt">my_kmeans -&gt; my_kmeans</span></code></pre>
+<p>Connections between nodes allow them to share data.</p>
+<p>For instance, using the declaration &quot;<code>my_data -&gt; my_kmeans</code>&quot;, data emitted by nodes from the node group <code>my_data</code> will be processed by nodes from the node group <code>my_kmeans</code>. NB: since we consider asynchronous and decentralized protocols, there is no way to choose or predict which specific nodes pairs will share data.</p>
+<p>The last declaration &quot;<code>my_kmeans -&gt; my_kmeans</code>&quot; tells that nodes from the the node group <code>my_kmeans</code> can share data between them.</p>
+<h4 id="final-model">Final model</h4>
+<p>All the previous declarations are presented here as a single block, and can be found in <em>examples/kmeans_single_host.model</em>:</p>
+<pre class="sourceCode ini"><code class="sourceCode ini"><span class="dt">Host a </span><span class="ot">=</span><span class="st"> </span><span class="kw">localhost</span><span class="st">:</span><span class="dv">10001</span><span class="st"> </span><span class="dv">4</span>
+
+<span class="dt">NodeDataFile my_data</span>
+<span class="dt">my_data.file </span><span class="ot">=</span><span class="st"> mnist.idx3-ubyte</span>
+<span class="dt">my_data @ a </span><span class="kw">[1]</span>
+
+<span class="dt">NodeKMeans my_kmeans</span>
+<span class="dt">my_kmeans.K </span><span class="ot">=</span><span class="st"> </span><span class="dv">32</span>
+<span class="dt">my_kmeans.epsilon </span><span class="ot">=</span><span class="st"> </span><span class="fl">0.001</span>
+<span class="dt">my_kmeans.verbose </span><span class="ot">=</span><span class="st"> </span><span class="dv">1</span>
+<span class="dt">my_kmeans @ a </span><span class="kw">[10]</span>
+
+<span class="dt">my_data -&gt; my_kmeans</span>
+<span class="dt">my_kmeans -&gt; my_kmeans</span></code></pre>
+<h3 id="model-execution">Model execution</h3>
+<p>The previous model can be run using the server binary that embed clustering algorithms:</p>
+<pre class="sourceCode bash"><code class="sourceCode bash">$ <span class="kw">cd</span> examples
+$ <span class="kw">../bin/agml_server_clustering</span> model <span class="st">&quot;</span><span class="ot">$(</span><span class="kw">cat</span> kmeans_single_host.model<span class="ot">)</span><span class="st">&quot;</span> </code></pre>
+<p>This command executes the model, and stops then every node has converged (according to <code>my_kmeans.epsilon</code> value).</p>
+<p>After this call, one can find in the examples directory a pair of files for each kmeans node.</p>
+<p>The first file per node is named <em>my_kmeans@a_[nodeid].fvec</em>, where <em>[nodeid]</em> is the id of one the nodes (from 0 to 9 in our example). This file contains the set of cluster centers computed by the corresponding node. If the learning algorithm is successful, all nodes should have converged to very close cluster centers. Using the properties in the current example, one can see that cluster centers from any node is almost always the same. Note that a better consensus can be achieved if <code>my_kmeans.epsilon</code> value is lower.</p>
+<p>The second file per node is named <em>MSE_my_kmeans@a_[nodeid].txt</em> lists Mean Squared Errors regularly measured for node <em>[nodeid]</em>. As for the cluster centers, all nodes should be converging to the same value.</p>
+<h3 id="monitoring">Monitoring</h3>
+<p><em>...Under construction...</em></p>
+<h3 id="whats-next">What's next ?</h3>
+<p>Proceed with <a href="tutorial_2.html">Tutorial 2</a></p>
+</body>
+</html>

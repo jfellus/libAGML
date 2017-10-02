@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="pandoc">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title></title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <!--[if lt IE 9]>
+    <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+  <![endif]-->
+  <style type="text/css">
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #0000ff; }
+code > span.ch { color: #008080; }
+code > span.st { color: #008080; }
+code > span.co { color: #008000; }
+code > span.ot { color: #ff4000; }
+code > span.al { color: #ff0000; }
+code > span.er { font-weight: bold; }
+  </style>
+  <link rel="stylesheet" href="style/a.css">
+  <script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+</head>
+<body>
+<h1 id="tutorial-4-handling-data">Tutorial 4 : Handling data</h1>
+<p>In most case, algorithms receive multiple data stream of distinct nature and role. For example, a distributed Machine Learning algorithm at least receive training samples from a data provider and exchange partial estimates or parameters between nodes.</p>
+<p>In libAGML, this multiple-roles data flow is achieved through <strong>channels</strong>.</p>
+<h2 id="channels">Channels</h2>
+<p>Channels are positive integers that uniquely identify the role of some data stream in a model. libAGML define some common channels in <code>channels.h</code>, such as</p>
+<ul>
+<li><em>AGML_CHANNEL_TRAINING_DATA</em> : used for sending training samples to learning algorithms</li>
+<li><em>AGML_CHANNEL_GRADIENT</em> : used for exchanging gradients in gradient-based optimization algorithms.</li>
+<li><em>AGML_CHANNEL_LABELS</em> : used for sending supervision labels associated with training samples in supervised classification tasks.</li>
+<li>etc ...</li>
+</ul>
+<p>Using these default channels is not mandatory, but is probably a good practice to standardize the data flow over many implemented algorithms. Anyway, you can use your own user-defined channels as custom integers (please use integers greater than 100 to avoid collision with the default ones...).</p>
+<p>To send data on specific channels in your NodeClass code, please use the <a href="messages.html">Message API</a>. Message API allows to send multiple data blocks in a single 'Message' packet through the Message class. Messages can be easily given a channel number at creation:</p>
+<pre class="sourceCode cpp"><code class="sourceCode cpp"><span class="ot">#define AGML_CHANNEL_MY_CHANNEL 666</span>
+<span class="dt">float</span> myfloat = <span class="fl">0.1</span>; 
+<span class="dt">int</span> myint = <span class="dv">10</span>;
+<span class="dt">char</span>* mybuffer = <span class="kw">new</span> <span class="dt">char</span>[<span class="dv">500</span>];
+std::string mystring = <span class="st">&quot;ok&quot;</span>;
+
+Message m(AGML_CHANNEL_MY_CHANNEL);
+m.add(myfloat);
+m.add(myint);
+m.add(mystring);
+m.add(mybuffer, <span class="dv">500</span>);
+
+<span class="dt">int</span> neighbor_id = rand()%get_nb_outs(); <span class="co">// Draw some random neighboring node</span>
+send(neighbor_id, m);</code></pre>
+<h2 id="nodedatafile">NodeDataFile</h2>
+<p>libAGML provides a standard <id>NodeDataFile</id> class that reads a Matrix from some local file and spread its rows to connected destination nodes.</p>
+<p>The input file is specified in the Model file by adding</p>
+<pre class="sourceCode ini"><code class="sourceCode ini"><span class="dt">mydatagrp.file </span><span class="ot">=</span><span class="st"> /home/me/somefile.fvec</span></code></pre>
+<p>If some NodeDataFile group is connected to another group with <span class="math">\(N\)</span> nodes, the input matrix rows will be split in <span class="math">\(N\)</span> parts and each part will be sent to each destination node. There is no way to assign one part to a specific node, but it is guaranteed that all destination nodes get an equally-sized and distinct sample (if possible).</p>
+<p>Here is the source code of NodeDataFile as implemented in libAGML:</p>
+<pre class="sourceCode cpp"><code class="sourceCode cpp"><span class="kw">class</span> NodeDataFile : <span class="kw">public</span> NodeData {
+<span class="kw">public</span>:
+    std::string file;
+
+<span class="kw">public</span>:
+    <span class="kw">virtual</span> Matrix generate_data() {
+        file = get_property(<span class="st">&quot;file&quot;</span>);
+        Matrix X;
+        X.read(file);
+        <span class="kw">return</span> X;
+    }
+};
+
+AGML_NODE_CLASS(NodeDataFile)</code></pre>
+<p>It extends NodeData which is a general data provider NodeClass:</p>
+<pre class="sourceCode cpp"><code class="sourceCode cpp"><span class="ot">#include &lt;agml/node.h&gt;</span>
+<span class="ot">#include &quot;channels.h&quot;</span>
+
+<span class="kw">class</span> NodeData : <span class="kw">public</span> Node {
+<span class="kw">private</span>:
+    size_t n,D;
+    Matrix X;
+
+    <span class="dt">int</span> channel;
+
+    <span class="dt">bool</span>* ack;
+    size_t nback;
+<span class="kw">public</span>:
+
+    <span class="kw">virtual</span> Matrix generate_data() = <span class="dv">0</span>;
+
+    <span class="kw">virtual</span> <span class="dt">void</span> init() {
+        channel = get_property_int(<span class="st">&quot;channel&quot;</span>, AGML_CHANNEL_TRAINING_DATA);
+
+        ack = <span class="dv">0</span>;
+        nback = <span class="dv">0</span>;
+        <span class="kw">if</span>(!X) {
+            X = generate_data();
+            n = X.height;
+            D = X.width;
+        }
+    }
+
+    <span class="kw">virtual</span> <span class="dt">void</span> process() {
+        <span class="kw">if</span>(get_nb_outs()==<span class="dv">0</span>) <span class="kw">return</span>;
+
+        <span class="kw">if</span>(nback &gt;= (size_t)get_nb_outs()) {
+            DBG(<span class="st">&quot;Data sent ! done !&quot;</span>);
+            detach();
+            <span class="kw">return</span>;
+        }
+
+        <span class="kw">if</span>(!ack) {
+            ack = <span class="kw">new</span> <span class="dt">bool</span>[get_nb_outs()];
+            memset(ack, <span class="dv">0</span>, <span class="kw">sizeof</span>(<span class="dt">bool</span>)*get_nb_outs());
+            nback = <span class="dv">0</span>;
+        }
+
+        <span class="kw">for</span>(<span class="dt">int</span> i=<span class="dv">0</span>; i&lt;get_nb_outs(); i++) {
+            <span class="kw">if</span>(ack[i]) <span class="kw">continue</span>;
+            Message m(channel);
+            Matrix p = X.part(i, get_nb_outs());
+            message_add_matrix(&amp;m, p);
+            <span class="kw">if</span>(send(i, m)) {
+                nback++;
+                ack[i] = <span class="kw">true</span>;
+                DBG(<span class="st">&quot;Sent data &quot;</span> &lt;&lt; nback &lt;&lt; <span class="st">&quot;/&quot;</span> &lt;&lt; get_nb_outs());
+            }
+        }
+    }
+
+    <span class="kw">virtual</span> <span class="dt">void</span> on_receive(Message* m) {}
+};</code></pre>
+<blockquote>
+<p><strong>NOTE</strong> : the <code>send(...)</code> methods return a boolean, that is <em>true</em> if the message was successfully sent to the destination node, and <em>false</em> if something went wrong on the networkn if the node is no more available or isn't already created (yes, remote nodes are not guaranteed to be already created when the local ones are launched, <em>e.g.</em> if the remote computer is slower or whatever). This is why <id>NodeData</id> maintains a <id>ack</id> boolean array that is progressively filled to <em>true</em> as data is successfully sent to destination nodes.</p>
+</blockquote>
+<blockquote>
+<p><strong>NOTE</strong> : You might have noticed the <code>detach()</code> function call. Together with <code>attach()</code>, it allows a Node to get detached or reattached to the scheduler list. When detached, its <code>process()</code> method is never called. However, it can still receive messages from other nodes through its <code>on_receive()</code> method, thus allowing a node in a detached state to be 're-waken' by another one's message. Here <id>NodeData</id> detaches when all destination nodes have been fed with their sample. Detaching nodes that don't need to perform computation at some time is a good pratice, to prevent the scheduler from triggering many NOP iterations.</p>
+</blockquote>
+<blockquote>
+<p><strong>NOTE</strong> : By default, <id>NodeData</id> send data on the <em>AGML_CHANNEL_TRAINING_DATA</em> channel. This can be overriden by setting <code>channel=&lt;some_integer&gt;</code> in Model files. This way, multiple input data streams can be handled from multiple <id>NodeData</id> groups with distinct roles.</p>
+</blockquote>
+<h2 id="source-code-for-nodeavg-with-external-data-input">Source code for NodeAVG with external data input</h2>
+<p>Now we can write the code for our averaging Node Class. We'll use a custom channel (MY_CHANNEL=123) to exchange estimates between nodes. Our nodes will attach only when they received a input matrix on channel AGML_CHANNEL_TRAINING_DATA (default output channel of <id>NodeDataFile</id>). We'll make use of the Matrix class, which helps readability (you can obviously use any of your Matrix types, although the Message API offers helper functions to serialize a Matrix into a Message, which can be tedious and repetitive code...)</p>
+<pre class="sourceCode cpp"><code class="sourceCode cpp">
+<span class="ot">#include &lt;agml/node.h&gt;</span>
+<span class="ot">#include &quot;channels.h&quot;</span>
+
+<span class="ot">#define MY_CHANNEL 123</span>
+<span class="kw">class</span> NodeAvg : <span class="kw">public</span> Node {
+<span class="kw">public</span>:
+    Matrix X;
+    size_t n,D;
+
+    Matrix S;
+    <span class="dt">float</span> w;
+<span class="kw">public</span>:
+    <span class="kw">virtual</span> <span class="dt">void</span> init() {
+        w = <span class="dv">1</span>;
+        <span class="kw">if</span>(X) {
+            D = X.width;
+            n = X.height;
+            S = (<span class="dt">const</span> Matrix&amp;)X;
+            S*=w;
+            attach();
+        } <span class="kw">else</span> detach();
+    }
+
+    <span class="dt">void</span> update() {
+        X = (<span class="dt">const</span> Matrix&amp;) S;
+        X /= w;
+        SYNC_START();
+        X.dump();
+        usleep(<span class="dv">80000</span>);
+        SYNC_END();
+    }
+
+    <span class="kw">virtual</span> <span class="dt">void</span> process() {
+        <span class="kw">if</span>(get_nb_outs()&gt;<span class="dv">0</span>){
+            <span class="dt">int</span> i = rand()%get_nb_outs();
+
+            w/=<span class="dv">2</span>;S/=<span class="dv">2</span>;
+
+            Message m(MY_CHANNEL);
+            message_add_matrix(&amp;m, S);
+            m.add(w);
+            <span class="kw">if</span>(!send(i, m)) {
+                w*=<span class="dv">2</span>; S*=<span class="dv">2</span>;
+            }
+        }
+        usleep(<span class="dv">100000</span>);
+    }
+
+    <span class="kw">virtual</span> <span class="dt">void</span> on_receive(Message* m) {
+        <span class="kw">if</span>(m-&gt;channel==AGML_CHANNEL_TRAINING_DATA) {
+            message_get_matrix(m, X);
+            init();
+        } <span class="kw">else</span> <span class="kw">if</span>(m-&gt;channel==MY_CHANNEL) {
+            Matrix Sin;
+            message_get_matrix(m, Sin);
+            <span class="dt">float</span> win = m-&gt;get&lt;<span class="dt">float</span>&gt;();
+            S += Sin;
+            w += win;
+            update();
+        }
+    }
+};
+
+AGML_NODE_CLASS(NodeAvg)</code></pre>
+<h2 id="testing-with-a-simple-model">Testing with a simple Model</h2>
+<p>Let's test our new NodeClass with a simple Model file <code>avg.model</code>:</p>
+<pre class="sourceCode ini"><code class="sourceCode ini"><span class="co"># Hosts</span>
+<span class="dt">Host a </span><span class="ot">=</span><span class="st"> </span><span class="kw">localhost</span><span class="st">:</span><span class="dv">10001</span><span class="st"> </span><span class="dv">1</span>
+<span class="dt">Host b </span><span class="ot">=</span><span class="st"> </span><span class="kw">localhost</span><span class="st">:</span><span class="dv">10002</span><span class="st"> </span><span class="dv">4</span>
+
+<span class="co"># Groups</span>
+<span class="dt">NodeDataFile f</span>
+<span class="dt">NodeAvg avg</span>
+
+<span class="dt">f.file </span><span class="ot">=</span><span class="st"> /home/me/a.fvec</span>
+
+<span class="dt">f -&gt; avg</span>
+<span class="dt">avg -&gt; avg</span>
+
+<span class="co"># Assoc</span>
+<span class="dt">f@a</span><span class="kw">[1]</span>
+<span class="dt">avg@b * </span><span class="kw">[10]</span></code></pre>
+<p>Let's now execute it:</p>
+<pre class="sourceCode bash"><code class="sourceCode bash">$ <span class="kw">agmld</span> -p 10001 <span class="kw">&amp;</span>
+$ <span class="kw">agmld</span> -p 10002 <span class="kw">&amp;</span>
+$ <span class="kw">agml</span> model <span class="st">&quot;</span><span class="kw">$(&lt;</span> avg.model<span class="kw">)</span><span class="st">&quot;</span></code></pre>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="pandoc">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title></title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <!--[if lt IE 9]>
+    <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+  <![endif]-->
+  <style type="text/css">
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #0000ff; }
+code > span.ch { color: #008080; }
+code > span.st { color: #008080; }
+code > span.co { color: #008000; }
+code > span.ot { color: #ff4000; }
+code > span.al { color: #ff0000; }
+code > span.er { font-weight: bold; }
+  </style>
+  <link rel="stylesheet" href="style/a.css">
+</head>
+<body>
+<h1 id="libagml-model-files-syntax">libAGML Model files Syntax</h1>
+<p>libAGML Model files are text files that declare <code>NodeGroup</code>s to be instanciated, assigned to <code>Host</code>s and connected to each-other.</p>
+<p>A typical Model file is made of 5 components (that can be interleaved in any way) :</p>
+<ul>
+<li><strong>Hosts declaration</strong> : This section declares the hosts that will take part in computing this model. Each <code>Host</code> is given a string identifier that serves as a shortcut to reference it in the next section. An <code>Host</code> is defined by an IP address and a port number where a running <code>agmld</code> daemon should be found at runtime.</li>
+<li><strong>NodeGroups declaration</strong> : Declare groups of Nodes in terms of realized function. Each <code>NodeGroup</code> is given a string identifier and a C++ <code>NodeClass</code> to execute (see <a href="nodes_classes.html">Node Classes</a>).</li>
+<li><strong>NodeGroups connection</strong> : Specify the data flow between NodeGroups. For each link, all nodes of the source NodeGroup are eventually connected to all nodes of the destination NodeGroup, following some specified <a href="#connection">connectivity pattern</a>.</li>
+<li><strong>NodeGroups parameters</strong> : Most algorithms need parameters to work. Setting properties (key-value pairs) to NodeGroup is made for this.</li>
+<li><strong>Assignment of Nodes to Hosts</strong>. For each NodeGroup, instanciate a given number of Nodes on each Host, eventually on specific Threads.</li>
+</ul>
+<h2 id="example">Example</h2>
+<p>Here is an example of a model file:</p>
+<pre class="sourceCode ini"><code class="sourceCode ini">
+<span class="co"># 1) Declare hosts</span>
+<span class="co">#    Host &lt;host_id&gt; = &lt;ip:port&gt; [nb_threads]</span>
+<span class="dt">Host a </span><span class="ot">=</span><span class="st"> </span><span class="kw">localhost</span><span class="st">:</span><span class="dv">10001</span><span class="st"> </span><span class="dv">2</span>
+
+<span class="co"># 2) Create NodeGroups</span>
+<span class="co">#    &lt;NodeClass&gt; &lt;node_group_id&gt;;</span>
+<span class="dt">NodeDataFile data</span>
+<span class="dt">NodeKMeans kmeans</span>
+<span class="dt">NodeVLAT vlat</span>
+<span class="dt">NodeSimilarity sim</span>
+
+<span class="co"># 3) Assign Nodes to Hosts</span>
+<span class="co">#    &lt;node_group_id&gt; @ &lt;host_id&gt; [thread_number] [[nb_nodes]]</span>
+<span class="dt">data @ * 0 </span><span class="kw">[1]</span>
+<span class="dt">kmeans @ a * </span><span class="kw">[10]</span>
+<span class="dt">vlat @ * * </span><span class="kw">[5]</span>
+<span class="dt">sim @ b 0 </span><span class="kw">[1]</span>
+
+<span class="co"># 4) Set some NodeGroup properties </span>
+<span class="co"># &lt;node_group_id&gt;.key = val</span>
+<span class="dt">data.file </span><span class="ot">=</span><span class="st"> features.fvec</span>
+<span class="dt">kmeans.M </span><span class="ot">=</span><span class="st"> </span><span class="dv">7</span>
+<span class="dt">kmeans.K </span><span class="ot">=</span><span class="st"> </span><span class="dv">10</span>
+<span class="dt">vlat.order </span><span class="ot">=</span><span class="st"> </span><span class="dv">2</span>
+
+<span class="co"># 5) Connect NodeGroups according to the model&#39;s data flow</span>
+<span class="dt">data -L&gt; kmeans</span>
+<span class="dt">kmeans -o&gt; kmeans</span>
+<span class="dt">data -L&gt; vlat</span>
+<span class="dt">kmeans -&gt; vlat</span>
+<span class="dt">vlat -&gt; sim</span></code></pre>
+<h2 id="assign-nodes-to-hosts">Assign Nodes to Hosts</h2>
+<p>When assigning Nodes to Hosts, wildcard <code>*</code> can be used to mean &quot;all hosts&quot; (if used right after @) or &quot;all threads&quot; (if used after a host id or another wildcard). The number of nodes in square brackets always stands for the number of nodes instanciated <u><em>per thread</em></u>.</p>
+<p>If no thread number is set and no wildcard is used, Nodes are evenly spread on available threads. For example,</p>
+<pre class="sourceCode ini"><code class="sourceCode ini"><span class="dt">Host pcA </span><span class="ot">=</span><span class="st"> </span><span class="kw">localhost</span><span class="st"> </span><span class="dv">10</span>
+<span class="dt">...</span>
+<span class="dt">grp1 @ pcA </span><span class="kw">[20]</span></code></pre>
+<p>will distribute 20 nodes for group <id>grp1</id> on all 10 threads of <id>pcA</id>, assigning 2 nodes per thread.</p>
+<h2 id="nodegroups-connectivity-patterns"><a name="connections"></a>NodeGroups connectivity patterns</h2>
+<p>NodeGroups can exchange data following various connectivity patterns between Nodes. They are specified by using distinct link syntaxes:</p>
+<ul>
+<li><code>grp1 -&gt; grp2</code> means 'one to all' connectivity. That is, each Node in grp1 will talk to all Nodes in grp2. Importantly, <code>grp1 -&gt; grp1</code> makes each <id>grp1</id>'s Node communicate with the other Nodes in <id>grp1</id>, <u>excluding</u> itself.</li>
+<li><p><code>grp1 -o&gt; grp2</code> means 'one to all with self-loop' connectivity. If <code>grp1!=grp2</code>, this as the same effect as <code>grp1 -&gt; grp2</code>.</p>
+But for <code>grp1 -o&gt; grp1</code>, each <id>grp1</id>'s Node communicate with the other Nodes in <id>grp1</id>, <u>including</u> itself.</li>
+<li><p><code>grp1 -L&gt; grp2</code> means 'local one to all' connectivity. Each node in <id>grp1</id> will communicate with all nodes of <id>grp2</id> that run <u>on the same Host</u>. This is useful for data provider nodes getting massive data from a local file available on each machine, to avoid sending these big data on the network.</p></li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="pandoc">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title></title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <!--[if lt IE 9]>
+    <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+  <![endif]-->
+  <style type="text/css">
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #0000ff; }
+code > span.ch { color: #008080; }
+code > span.st { color: #008080; }
+code > span.co { color: #008000; }
+code > span.ot { color: #ff4000; }
+code > span.al { color: #ff0000; }
+code > span.er { font-weight: bold; }
+  </style>
+  <link rel="stylesheet" href="style/a.css">
+</head>
+<body>
+<h1 id="libagml-users-documentation">libAGML User's Documentation</h1>
+<h2 id="what-is-libagml">What is libAGML ?</h2>
+<p>libAGML is a software library for Asynchronous Decentralized Machine Learning. It allows a set of computers in a network to run optimization algorithms and statistical learning chains in a fully decentralized and asynchronous fashion. In the AGML paradigm, decentralization and asynchrony have the following definitions:</p>
+<ul>
+<li><p>Decentralization : All computation units play the same role. That is, there isn't any /master node/ or specific required connectivity (obviously appart from having a strongly connected network). In AGML, groups of nodes are functionally homogeneous, meaning that all nodes in a given group execute the very same algorithm, and communicate with its direct neighbors without any distinction. In practice, when two node groups running different algorithms need to exchange data, output nodes are never aware of which input node they are talking to. They only know that they are sending data to one of the nodes in the destination group. Consequently, data exchanges between algorithms is always conceived at the <code>NodeGroup</code> level, never at the individual <code>Node</code> level.</p></li>
+<li><p>Asynchrony : AGML is mostly built on asynchronous communications. This means that when some node sends data to a neighbor, it is not allowed (or at least discouraged) to wait for the neighbor's response. The advantage of enforcing such constraint appears when receiver nodes are busy or require a long running operation to process incoming data before answering to the sender. Any algorithm or protocol that is built on synchronous communication, where senders wait for receiver response before doing any further computation, is likely to encounter dead-locks or catastrophic slow-downs when fast processing of incoming data and nodes availability is not always formally guaranteed. This is actually the case in most optimization algorithm in machine learning where updating parameters both locally and in reaction to incoming data can not be carried out simultaneously, thus requiring synchronisation barriers between long-running operations. Asynchronous communications circumvent this drawback, but generally require dedicated optimization schemes, thus tagged as /asynchronous/.</p></li>
+</ul>
+<p>It is written in C++ and is (initially) targetted to POSIX platforms.</p>
+<h2 id="usage">Usage</h2>
+<p>test md</p>
+<blockquote>
+<p>oritht orih roih boxboxboborbrroi o ioti tboi toib t oiorijroji</p>
+</blockquote>
+<p>rergeoijoe totij oij troitj yjorij yori tjyoirj tyoirj ij rji</p>
+<pre class="sourceCode bash"><code class="sourceCode bash"><span class="kw">agmld</span> topology <span class="st">&quot;</span><span class="kw">$(&lt;</span> topology.cfg<span class="kw">)</span><span class="st">&quot;</span></code></pre>
+<h3 id="serverclient">Server/Client</h3>
+<pre class="sourceCode bash"><code class="sourceCode bash">$ <span class="kw">agmld</span></code></pre>
+<pre class="sourceCode bash"><code class="sourceCode bash">$ <span class="kw">agml</span> localhost:10001 topology <span class="st">&quot;</span><span class="kw">$(&lt;</span> topology.cfg<span class="kw">)</span><span class="st">&quot;</span></code></pre>
+<p>ok</p>
+<ul>
+<li>ok1</li>
+<li>ok2</li>
+<li>ok3</li>
+</ul>
+<pre class="sourceCode html"><code class="sourceCode html"><span class="kw">&lt;link</span><span class="ot"> rel=</span><span class="st">&quot;stylesheet&quot;</span><span class="ot"> href=</span><span class="st">&quot;github-markdown.css&quot;</span><span class="kw">&gt;</span>
+<span class="kw">&lt;style&gt;</span>
+    <span class="fl">.markdown-body</span> <span class="kw">{</span>
+        <span class="kw">min-width:</span> <span class="dt">200px</span><span class="kw">;</span>
+        <span class="kw">max-width:</span> <span class="dt">790px</span><span class="kw">;</span>
+        <span class="kw">margin:</span> <span class="dt">0</span> <span class="dt">auto</span><span class="kw">;</span>
+        <span class="kw">padding:</span> <span class="dt">30px</span><span class="kw">;</span>
+    <span class="kw">}</span>
+<span class="kw">&lt;/style&gt;</span>
+<span class="kw">&lt;article</span><span class="ot"> class=</span><span class="st">&quot;markdown-body&quot;</span><span class="kw">&gt;</span>
+    <span class="kw">&lt;h1&gt;</span>Unicorns<span class="kw">&lt;/h1&gt;</span>
+    <span class="kw">&lt;p&gt;</span>All the things<span class="kw">&lt;/p&gt;</span>
+<span class="kw">&lt;/article&gt;</span></code></pre>
+<p>Zob Le mamouth</p>
+</body>
+</html>

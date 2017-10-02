@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="pandoc">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title></title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <!--[if lt IE 9]>
+    <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+  <![endif]-->
+  <style type="text/css">
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #0000ff; }
+code > span.ch { color: #008080; }
+code > span.st { color: #008080; }
+code > span.co { color: #008000; }
+code > span.ot { color: #ff4000; }
+code > span.al { color: #ff0000; }
+code > span.er { font-weight: bold; }
+  </style>
+  <link rel="stylesheet" href="style/a.css">
+</head>
+<body>
+<h1 id="agml-agml-client-program.">agml : AGML Client program.</h1>
+<p><code>agml</code> is the AGML client. It can connect to a running AGML daemon (<code>agmld</code>) to request instanciation of <code>Host</code>s, <code>NodeGroup</code>s and assign <code>Node</code>s to <code>Host</code>s.</p>
+<h2 id="basic-commands">Basic commands</h2>
+<p>To check if <code>agml</code> can reach a running <code>agmld</code>, just type:</p>
+<pre class="sourceCode bash"><code class="sourceCode bash">$ <span class="kw">agml</span> <span class="kw">&lt;</span>ip:port<span class="kw">&gt;</span></code></pre>
+<p>If returning no error, connection was successful. If <id>port</id> is omitted, it defaults to 10001. If <id>ip</id> is omitted too, it defaults to <em>locahost</em>.</p>
+<p>A running daemon can be stopped by typing:</p>
+<pre class="sourceCode bash"><code class="sourceCode bash">$ <span class="kw">agml</span> <span class="kw">&lt;</span>ip:port<span class="kw">&gt;</span> exit</code></pre>
+<h2 id="models-instanciation">Models instanciation</h2>
+<p>A computational model can be instanciated on a given daemon by typing:</p>
+<pre class="sourceCode bash"><code class="sourceCode bash">$ <span class="kw">agml</span> <span class="kw">&lt;</span>ip:port<span class="kw">&gt;</span> model <span class="st">&quot;</span><span class="kw">$(&lt;</span> my_model_file.txt<span class="kw">)</span><span class="st">&quot;</span> </code></pre>
+<p>where <code>my_model_file.txt</code> is a text file describing the instanciated model following the <a href="agml_syntax.html">AGML Syntax</a>. The following steps are then automatically performed: 1. Statements are read from the file to extract <code>Host</code>s specifications 2. If <code>Host</code>s running on remote daemons are found, the model file is forwarded to each of them. 3. Instanciate local <code>Node</code>s according to the statements read in the model file. 4. Create data connections to the remote <code>Host</code>s associated with <code>NodeGroup</code>s that are connected to locally instanciated <code>Node</code>s. 5. Start the specified number of <code>Threads</code> and execute the locally instanciated <code>Node</code>s until an <em>exit</em> request is received from an <code>agml</code> client.</p>
+<blockquote>
+<p>Model files are automatically forwarded to the daemons pointed by the Hosts declared in the model file (regardless of whether they were previously connected through a bootstrap peer or not). As long as each <code>Host</code> address specified in the model file is accessible from the daemon contacted by the <code>agml</code> client, they will all be forwarded the model.</p>
+</blockquote>
+<blockquote>
+<p>If any remote daemon specified in the model file is unreachable from the contacted daemon, 10 trials are repeated before throwing an error. This avoids failures due to particular starting delays or orders.</p>
+</blockquote>
+<h2 id="incremental-instanciation-at-runtime-plastic-computing">Incremental instanciation at runtime : plastic computing</h2>
+<p>Statements can also be requested in an inline fashion at any time. For example:</p>
+<pre class="sourceCode bash"><code class="sourceCode bash">$ <span class="kw">agml</span> <span class="kw">&lt;</span>ip:port<span class="kw">&gt;</span> model <span class="st">&quot;mygrp@myhost 0 [10]&quot;</span></code></pre>
+<p>adds 10 Nodes to NodeGroup <id>mygrp</id> that will run on thread 0 of Host <id>myhost</id>.</p>
+<p>This feature allows AGML models to be <em>plastic</em>, that is, they can be updated both in terms of function, structure, and association to computing units at any time in an incremental way, without restarting or disturbing running computations. libAGML takes care of notifying running Nodes of any change in Topology and number of running units, to allow them to react accordingly (Node Class coders must take into account this dynamic nature by handling these notification in their algorithm).</p>
+</body>
+</html>

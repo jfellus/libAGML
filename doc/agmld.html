@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="pandoc">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title></title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <!--[if lt IE 9]>
+    <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+  <![endif]-->
+  <style type="text/css">
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #0000ff; }
+code > span.ch { color: #008080; }
+code > span.st { color: #008080; }
+code > span.co { color: #008000; }
+code > span.ot { color: #ff4000; }
+code > span.al { color: #ff0000; }
+code > span.er { font-weight: bold; }
+  </style>
+  <link rel="stylesheet" href="style/a.css">
+</head>
+<body>
+<h1 id="agmld-agml-server-daemon.">agmld : AGML Server daemon.</h1>
+<p><code>agmld</code> is the server daemon for AGML. It can be run in background on any machine that you plan to involve in computations, by typing</p>
+<pre class="sourceCode bash"><code class="sourceCode bash">$ <span class="kw">agmld</span></code></pre>
+<p><code>agmld</code> then waits for client connections from <code>agml</code>. By default, <code>agmld</code> binds to port 10001. Another port number can be set (<em>e.g</em> to run multiple instances on the same machine) by typing</p>
+<pre class="sourceCode bash"><code class="sourceCode bash">$ <span class="kw">agmld</span> -p <span class="kw">&lt;</span>port<span class="kw">&gt;</span></code></pre>
+<h2 id="manual-daemons-linking">Manual daemons linking</h2>
+<p>Multiple running daemons can be connected to eachother to make them exchange data on the network. This is achieved by specifying the address of a running daemon when starting a new one:</p>
+<pre class="sourceCode bash"><code class="sourceCode bash">$ <span class="kw">agmld</span> -p <span class="kw">&lt;</span>port<span class="kw">&gt;</span> <span class="kw">&lt;</span>bootstrap_peer_ip:port<span class="kw">&gt;</span></code></pre>
+<p>Once manually connected to the given bootstrap daemon, the new daemon gets <em>automatically</em> connected to all daemon the bootstrap daemon was already connected to. This allows to build a clique network by only connecting to one bootstrap peer each time a new daemon is launched. For example one can type:</p>
+<pre class="sourceCode bash"><code class="sourceCode bash"><span class="kw">machine1</span>$ agmld -p 20000
+<span class="kw">machine2</span>$ agmld machine1:20000
+<span class="kw">machine3</span>$ agmld machine1:20000
+<span class="kw">machine4</span>$ agmld machine1:20000
+<span class="kw">machine5</span>$ agmld machine1:20000
+<span class="kw">...</span>
+<span class="kw">machineN</span>$ agmld machine1:20000</code></pre>
+<blockquote>
+<p><strong>TIP</strong> : If unspecified, the default port is 10001. If 10001 is busy, 10002 is tried, then 10003 and so on. Besides, connecting to a bootstrap machine pointing to the same IP:port as the currently created daemon is not an error (but of course has no effect). Therefore, one can create multiple daemon using a for loop with a single shell statement:</p>
+</blockquote>
+<pre class="sourceCode bash"><code class="sourceCode bash"><span class="co"># Create 10 local daemons</span>
+$ <span class="kw">for</span> <span class="kw">i</span> in <span class="kw">`seq</span> 1 10<span class="kw">`;</span> <span class="kw">do</span> <span class="kw">agmld</span> localhost:10001 <span class="kw">&amp;</span>; <span class="kw">done</span></code></pre>
+<pre class="sourceCode bash"><code class="sourceCode bash"><span class="co"># Create 10 remote daemons</span>
+$ <span class="kw">for</span> <span class="kw">host</span> in <span class="kw">`seq</span> 1 10<span class="kw">`;</span> <span class="kw">do</span> <span class="kw">ssh</span> me@pc<span class="ot">${i}</span>.mylab.com <span class="st">&quot;nohup &#39;agmld me@pc1.mylab.com&#39; &amp; &quot;</span><span class="kw">;</span> <span class="kw">done</span></code></pre>
+<h2 id="automatic-daemons-linking">Automatic daemons linking</h2>
+<p>Manual daemons linking is in fact not very useful. Indeed, when executing a model request through <code>$agml model &quot;...&quot;</code>, hosts declared in the model file are automatically connected to eachother if this wasn't already the case. For example, take the following model file <code>test.model</code></p>
+<pre class="sourceCode bash"><code class="sourceCode bash"><span class="kw">Host</span> a = localhost 
+<span class="kw">Host</span> b = pc1.mylab.com
+<span class="kw">Host</span> c = pc1.otherlab.com</code></pre>
+<p>and run</p>
+<pre class="sourceCode bash"><code class="sourceCode bash">$ <span class="kw">ssh</span> me@pc1.mylab.com <span class="st">&quot;nohup &#39;agmld&#39; &amp;&quot;</span>
+$ <span class="kw">ssh</span> me@pc1.otherlab.com <span class="st">&quot;nohup &#39;agmld&#39; &amp;&quot;</span>
+$ <span class="kw">agmld</span> <span class="kw">&amp;</span>
+$ <span class="kw">agml</span> model <span class="st">&quot;</span><span class="kw">$(&lt;</span> test.model<span class="kw">)</span><span class="st">&quot;</span></code></pre>
+<p>This will send our model first to localhost, which will read the hosts statements and automatically connect to the specified machine addresses (as long as they are running agmld on the specified port).</p>
+<h2 id="direct-model-instanciation">Direct Model instanciation</h2>
+<p>Instead of running <code>agmld</code> on some machine followed by <code>agml model ...</code> on the same machine, Models statements can be directly requested when starting a daemon. For example</p>
+<pre class="sourceCode bash"><code class="sourceCode bash"><span class="ot">$agmld</span> [<span class="kw">-p</span> <span class="kw">&lt;</span>port<span class="kw">&gt;</span>] model <span class="st">&quot;</span><span class="kw">$(&lt;</span> test.model<span class="kw">)</span><span class="st">&quot;</span></code></pre>
+<p>will behave exactly as if you'd type</p>
+<pre class="sourceCode bash"><code class="sourceCode bash"><span class="ot">$agmld</span> [<span class="kw">-p</span> <span class="kw">&lt;</span>port<span class="kw">&gt;</span>]
+<span class="ot">$agml</span> <span class="kw">localhost</span>:port model <span class="st">&quot;</span><span class="kw">$(&lt;</span> test.model<span class="kw">)</span><span class="st">&quot;</span></code></pre>
+<h2 id="for-oar-users-forget-about-agmld">For OAR users : forget about agmld</h2>
+<p>For computing clusters running <a href="http://oar.imag.fr/">OAR</a> such as <a href="https://www.grid5000.fr">Grid5000</a>, <code>agmld</code> can be automatically started on a large set of machines using the <a href="additional_tools.html#oar_agml">oar_agml</a> tool. For instance, to spread computations of <code>mymodel.model</code> on 20 OAR nodes, you just need a single shell line:</p>
+<pre class="sourceCode bash"><code class="sourceCode bash"><span class="ot">$oar_agml</span> <span class="ot">nodes=</span>20 <span class="kw">model</span> <span class="st">&quot;</span><span class="kw">$(&lt;</span> mymodel.model<span class="kw">)</span><span class="st">&quot;</span></code></pre>
+<p>and the following is made automatically:</p>
+<ul>
+<li>Reserve 20 OAR nodes (machines)</li>
+<li>Start 20 <code>agmld</code> daemons, one per machine</li>
+<li>Load <code>mymodel.model</code> on one of them</li>
+<li>Open needed network connections</li>
+<li>Forward the model to the 19 other machines</li>
+<li>Instanciate the model</li>
+<li>Execute the model</li>
+</ul>
+</body>
+</html>

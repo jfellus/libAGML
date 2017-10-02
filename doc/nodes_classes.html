@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="pandoc">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title></title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <!--[if lt IE 9]>
+    <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+  <![endif]-->
+  <style type="text/css">
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #0000ff; }
+code > span.ch { color: #008080; }
+code > span.st { color: #008080; }
+code > span.co { color: #008000; }
+code > span.ot { color: #ff4000; }
+code > span.al { color: #ff0000; }
+code > span.er { font-weight: bold; }
+  </style>
+  <link rel="stylesheet" href="style/a.css">
+</head>
+<body>
+<h1 id="libagml-node-classes">libAGML Node Classes</h1>
+<p>In libAGML, Node Classes are C++ classes that implement the functionality for a <code>NodeGroup</code>. If a <code>NodeGroup</code> is declared with some node class, say <code>NodeMyClass</code>, all <code>Node</code> belonging to this <code>NodeGroup</code> will execute the code in <code>NodeMyClass</code>.</p>
+<p>Node Classes must inherit from the <id>Node</id> class declared in the <code>&lt;agml/node.h&gt;</code> header in the <code>libagml_com</code> core library. Here is an example of Node Class:</p>
+<pre class="sourceCode cpp"><code class="sourceCode cpp"><span class="ot">#include &lt;agml/node.h&gt;</span>
+
+
+<span class="kw">class</span> NodeExample : <span class="kw">public</span> Node {
+<span class="kw">public</span>:
+    <span class="dt">float</span> f;
+<span class="kw">public</span>:
+    <span class="co">/** </span>
+<span class="co">    * This method is called before the first call to this node&#39;s process() method.</span>
+<span class="co">    * It can be used as a lazy-constructor</span>
+<span class="co">    */</span>
+    <span class="kw">virtual</span> <span class="dt">void</span> init() {
+        std::cout &lt;&lt; <span class="st">&quot;INIT !!!!</span><span class="ch">\n</span><span class="st">&quot;</span>;
+        f = rand();
+    }
+
+    <span class="co">/** </span>
+<span class="co">    * This method is called each time this node is scheduled by its Host to execute</span>
+<span class="co">    * a computation step. </span>
+<span class="co">    * Messages can be sent but can&#39;t be received in this method.</span>
+<span class="co">    */</span>
+    <span class="kw">virtual</span> <span class="dt">void</span> process() {
+        <span class="kw">if</span>(get_nb_outs()&gt;<span class="dv">0</span>){                <span class="co">// get_nb_outs() returns the number of outgoing links to neighboring nodes</span>
+            <span class="dt">int</span> i = rand()%get_nb_outs();       <span class="co">// Select a random neighboring Node</span>
+            Message m;              <span class="co">// Create a message</span>
+            m.add(f);               <span class="co">// Add a float to it</span>
+            send(i, m);             <span class="co">// Send the message to the neighbor </span>
+        }
+    }
+
+    <span class="co">/**</span>
+<span class="co">    * This method is called when some neighboring Node has sent a message to this Node.</span>
+<span class="co">    * IMPORTANT :</span>
+<span class="co">    *   - Data shouldn&#39;t be sent in this method.</span>
+<span class="co">    *   - This method shouldn&#39;t perform long-running operations (use process() instead)</span>
+<span class="co">    *     otherwise communication bottlenecks and overflow might occur.</span>
+<span class="co">    */</span>
+    <span class="kw">virtual</span> <span class="dt">void</span> on_receive(Message* m) {
+        <span class="dt">float</span> my_friends_f = m-&gt;get&lt;<span class="dt">float</span>&gt;();       <span class="co">// Extract a float from the neighbor&#39;s message</span>
+        f += my_friends_f;              <span class="co">// Compute some aggregate</span>
+    }
+};
+
+AGML_NODE_CLASS(NodeExample)        <span class="co">// This macro allows to use NodeExample into AGML Model files declarations</span></code></pre>
+<blockquote>
+<p>Don't forget to add <code>AGML_NODE_CLASS(MyNodeClass)</code>, otherwise the class won't be visible to <code>agmld</code>.</p>
+</blockquote>
+<h2 id="compilation-deployment">Compilation &amp; Deployment</h2>
+<p>Build a shared library from your classes source code, and link it to <code>libagml_com.so</code>. Then, copy it to a location accessible to any daemon that will require it</p>
+<pre class="sourceCode bash"><code class="sourceCode bash">$ <span class="kw">g++</span> -fPIC -shared -o libmyclasses.so myclasses.cpp -I/path/to/dist/libagml_comm -Lpath/to/libagml_comm.so -llibagml_comm-sse2
+$ <span class="kw">scp</span> libmyclasses.so myuser@remotemachine:/some/path</code></pre>
+<blockquote>
+<p>The destination location must be added to the <code>AGML_PATH</code> (or equivalently <code>LD_LIBRARY_PATH</code>) environment variables for every remote host (can be achieved through <em>e.g.</em> a shared <code>.bashrc</code>), unless it is <code>$HOME/agml</code>, <code>$HOME/.agml</code>, <code>$HOME/agml/lib</code></p>
+</blockquote>
+<blockquote>
+<p>The compiled shared library is loaded by <code>agmld</code> using <code>dlopen()</code>, meaning that the library can be compiled and deployed again without even stopping running computations.</p>
+</blockquote>
+<blockquote>
+<p>The <code>libagml.so</code> library is only a set of C++ classes exactly declared and compiled as the above example.</p>
+</blockquote>
+</body>
+</html>

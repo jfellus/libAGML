@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="pandoc">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title></title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <!--[if lt IE 9]>
+    <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+  <![endif]-->
+  <style type="text/css">
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #0000ff; }
+code > span.ch { color: #008080; }
+code > span.st { color: #008080; }
+code > span.co { color: #008000; }
+code > span.ot { color: #ff4000; }
+code > span.al { color: #ff0000; }
+code > span.er { font-weight: bold; }
+  </style>
+  <link rel="stylesheet" href="style/a.css">
+  <script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+</head>
+<body>
+<h1 id="tutorial-3-creating-a-new-node-class">Tutorial 3 : Creating a new Node Class</h1>
+<p>This tutorial is an introduction to implementing a very simple <code>NodeClass</code>.</p>
+<p>Your mission is to code a <code>NodeClass</code> that computes a distributed averaging in an asynchronous and decentralized fashion thanks to a Gossip protocol (see <em>e.g.</em> <a href="http://www.cs.cornell.edu/johannes/papers/2003/focs2003-gossip.pdf">Kempe <em>et at</em> 2003</a></p>
+<p>The algorithmic scheme that must be executed by each node is the following:</p>
+<ul>
+<li><strong>Initialization</strong> :
+<ul>
+<li>Wait for an input data matrix <span class="math">\(\mathbf{X}\)</span>.<br /></li>
+<li>Set <span class="math">\(\mathbf{S} = \mathbf{X}\)</span> and <span class="math">\(w = 1\)</span>.</li>
+</ul></li>
+<li><strong>Iterations</strong> (repeatedly):
+<ul>
+<li>Divide <span class="math">\(\mathbf{S}\)</span> and <span class="math">\(w\)</span> by 2</li>
+<li>Send <span class="math">\((\mathbf{S},w)\)</span> to some random neighboring <code>Node</code></li>
+</ul></li>
+<li><strong>Upon reception</strong> of a couple <span class="math">\((\mathbf{S}_i,w_i)\)</span>:
+<ul>
+<li>Set <span class="math">\(\mathbf{S} = \mathbf{S} + \mathbf{S}_i\)</span> and <span class="math">\(w = w + w_i\)</span></li>
+</ul></li>
+</ul>
+<p>As proven in, <em>e.g.</em>, <a href="http://infoscience.epfl.ch/record/148711/files/BenezitBTTV10.pdf">Bénézit <em>et al</em> 2010</a>, this process will converge to <span class="math">\[ \forall i, \frac{1}{w_i}\mathbf{S}_i \rightarrow \mu \]</span> where <span class="math">\(\mu \equiv \frac{1}{N}\sum_i^N \mathbf{X}_i\)</span> is the global average of all <span class="math">\(\mathbf{X}\)</span> in the network.</p>
+<blockquote>
+<p>IMPORTANT : Remark that <span class="math">\(\mathbf{S}\)</span> is to be updated in the three parts of the scheme (initialization, iteration, and reception). Therefore, care must be taken that only <em>one</em> of these parts is run at any time for a given node (mutually exclusive execution). Hopefully, <r>libAGML</r> takes care of this for you: the <code>init()</code>, <code>process()</code>, or <code>on_receive()</code> methods are guaranteed to be <em>never</em> called simultaneously for a same <code>Node</code>. The programmer can then update his <code>Node</code>s parameters without the concern of surrounding critical operations with thread synchronisation barriers or mutexes.</p>
+</blockquote>
+<h2 id="the-node-base-class">The <code>Node</code> base class</h2>
+<p>Every Node Class must extend the abstract class <code>Node</code>. It is provided by the <code>&lt;agml/node.h&gt;</code> header exposed by the <code>libagml_com</code> library.</p>
+<p>Node Classes must implement three main methods (pure virtual methods in the <code>Node</code> class): 1. <code>void init()</code> : This function initializes the internal parameters of the Node 2. <code>void process()</code>: This function performs a single iteration of the algorithm implemented by the Node. Calls to <code>send(...)</code> methods can be made to send data to neighboring nodes. 3. <code>void on_receive(Message* m)</code>: This function process a incoming message from a neighboring node. the Message API is provided to ease the packaging of multiple data entities (scalars, matrices, strings, entire files, etc...) into a common Message block, libAGML taking care of sending these entities in the same order has they have been packaged into the Message object (see <a href="message.html">Message API</a> for details).</p>
+<p>Here are the methods of the <code>Node</code> class that are relevant for this tutorial:</p>
+<pre class="sourceCode cpp"><code class="sourceCode cpp">
+<span class="kw">class</span> Node {
+<span class="co">// ...</span>
+<span class="kw">public</span>:
+    <span class="co">// The three methods to be implemented by custom NodeClasses</span>
+    <span class="kw">virtual</span> <span class="dt">void</span> init() = <span class="dv">0</span>;
+    <span class="kw">virtual</span> <span class="dt">void</span> process() = <span class="dv">0</span>;
+    <span class="kw">virtual</span> <span class="dt">void</span> on_receive(Message* m) = <span class="dv">0</span>;
+    
+    <span class="co">// Returns the number of neighboring Nodes this Node can send messages to (dynamically depends of the current specified topology)</span>
+    <span class="dt">long</span> get_nb_outs();
+
+    <span class="co">// Sends a Message to some neighbor</span>
+    <span class="dt">bool</span> send(<span class="dt">int</span> iNeighbor, Message&amp; m);
+
+<span class="co">// ...</span>
+};</code></pre>
+<h2 id="source-code-for-nodeavg">Source code for NodeAVG</h2>
+<p>Here is the solution</p>
+<pre class="sourceCode cpp"><code class="sourceCode cpp">
+<span class="ot">#include &lt;agml/node.h&gt;</span>
+<span class="ot">#include &quot;channels.h&quot;</span>
+
+<span class="kw">class</span> MyNodeAvg : <span class="kw">public</span> Node {
+<span class="kw">public</span>:
+    <span class="dt">float</span>* X;
+    size_t n,D;
+
+    <span class="dt">float</span>* S;
+    <span class="dt">float</span> w;
+<span class="kw">public</span>:
+    <span class="kw">virtual</span> <span class="dt">void</span> init() {
+        w = <span class="dv">1</span>;
+        D = get_property_int(<span class="st">&quot;D&quot;</span>, <span class="dv">10</span>);
+        n = get_property_int(<span class="st">&quot;n&quot;</span>, <span class="dv">10</span>);
+        X = <span class="kw">new</span> <span class="dt">float</span>[D*n];
+        S = <span class="kw">new</span> <span class="dt">float</span>[D*n];
+    }
+
+    <span class="dt">void</span> update() {
+        <span class="kw">for</span>(<span class="dt">int</span> i=<span class="dv">0</span>; i&lt;D*n; i++) X[i] = S[i]/w;
+        SYNC_START();
+        <span class="kw">for</span>(<span class="dt">int</span> i=<span class="dv">0</span>; i&lt;D*n; i++) printf(<span class="st">&quot;%f</span><span class="ch">\n</span><span class="st">&quot;</span>, X[i]);
+        usleep(<span class="dv">80000</span>);
+        SYNC_END();
+    }
+
+    <span class="kw">virtual</span> <span class="dt">void</span> process() {
+        <span class="kw">if</span>(get_nb_outs()&gt;<span class="dv">0</span>){
+            <span class="dt">int</span> i = rand()%get_nb_outs();
+
+            w/=<span class="dv">2</span>;
+            <span class="kw">for</span>(<span class="dt">int</span> i=<span class="dv">0</span>; i&lt;D*n; i++) S[i]/=<span class="dv">2</span>;
+
+            Message m;
+            m.add(X, D*n*<span class="kw">sizeof</span>(<span class="dt">float</span>));
+            m.add(w);
+            <span class="kw">if</span>(!send(i, m)) {
+                w*=<span class="dv">2</span>; 
+                <span class="kw">for</span>(<span class="dt">int</span> i=<span class="dv">0</span>; i&lt;D*n; i++) S[i]*=<span class="dv">2</span>;
+            }
+        }
+        usleep(<span class="dv">100000</span>);
+    }
+
+    <span class="kw">virtual</span> <span class="dt">void</span> on_receive(Message* m) {
+        <span class="dt">float</span>* Sin = (<span class="dt">float</span>*)m-&gt;next();
+        <span class="dt">float</span> win = m-&gt;get&lt;<span class="dt">float</span>&gt;();
+        <span class="kw">for</span>(<span class="dt">int</span> i=<span class="dv">0</span>; i&lt;n*D; i++) S[i] += Sin[i];
+        w += win;
+        update();
+    }
+};
+
+AGML_NODE_CLASS(MyNodeAvg)</code></pre>
+<blockquote>
+<p><strong>IMPORTANT</strong> : You must call the <code>AGML_NODE_CLASS(MyNodeAvg)</code> macro to declare that this class will be handled by libAGML as an instanciable NodeClass. Only classes tagged with this macro are visible to Model Files.</p>
+</blockquote>
+<h2 id="testing-with-a-simple-model">Testing with a simple Model</h2>
+<p>The model file <code>avg.model</code>:</p>
+<pre class="sourceCode ini"><code class="sourceCode ini"><span class="dt">Host a </span><span class="ot">=</span><span class="st"> </span><span class="kw">localhost</span><span class="st"> </span><span class="dv">4</span>
+
+<span class="dt">MyNodeAvg avg</span>
+
+<span class="dt">avg.n </span><span class="ot">=</span><span class="st"> </span><span class="dv">10</span>
+<span class="dt">avg.D </span><span class="ot">=</span><span class="st"> </span><span class="dv">10</span>
+
+<span class="dt">avg -&gt; avg</span>
+
+<span class="dt">avg@a </span><span class="kw">[4]</span></code></pre>
+<p>Execution:</p>
+<pre class="sourceCode bash"><code class="sourceCode bash">$ <span class="kw">agmld</span> model <span class="st">&quot;</span><span class="kw">$(&lt;</span> avg.model<span class="kw">)</span><span class="st">&quot;</span></code></pre>
+<h2 id="monitoring-node-local-estimates-with-agml_gui-and-node-infos-api">Monitoring node-local estimates with agml_gui and Node Infos API</h2>
+<p>Debugging distributed algorithms is often a tedious task become of the simultaneous execution of multiple process on several machines. Distributed applications debugging is sometimes achieved by monitoring some local variables by hand.</p>
+<p>libAGML provides a simple Node Infos API to allow easy monitoring of node-local scalar variables in <code>agml_gui</code>. For example, we can check if our averaging algorithm works fine by checking if the first entry of our local matrices <span class="math">\(\mathbf{X}\)</span> reach a consensus (<em>i.e.</em> tend to equality). In the update function, we just need to add</p>
+<pre class="sourceCode cpp"><code class="sourceCode cpp">    set_info_1(X[<span class="dv">0</span>]);</code></pre>
+<p>If we execute our model and launch <code>agml_gui</code>, the first entry of <span class="math">\(\mathbf{X}\)</span> is displayed for each NOde in column <em>'var1'</em>.</p>
+<figure>
+<img src="img/var1.png" alt="Monitoring node-local scalar variables through Node Info API in agml_gui" /><figcaption>Monitoring node-local scalar variables through Node Info API in agml_gui</figcaption>
+</figure>
+<p>Similarly, we could monitor second scalar variable using</p>
+<pre class="sourceCode cpp"><code class="sourceCode cpp">    set_info_2(something_else);</code></pre>
+<blockquote>
+<p><strong>NOTE</strong> : Node information, as set by <code>set_info_x()</code> are updated asynchronously. Thus, calls to <code>set_info_x()</code> won't ever slow-down your algorithm (concretely, it only writes a float in shared memory). As a side effect, you're not guaranteed to capture values from each call in the GUI, if they are written to fast.</p>
+</blockquote>
+<h3 id="whats-next">What's next ?</h3>
+<p>Proceed with <a href="tutorial_4.html">Tutorial 4</a></p>
+</body>
+</html>

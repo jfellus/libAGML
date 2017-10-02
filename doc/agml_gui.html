@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="pandoc">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title></title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <!--[if lt IE 9]>
+    <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+  <![endif]-->
+  <style type="text/css">
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #0000ff; }
+code > span.ch { color: #008080; }
+code > span.st { color: #008080; }
+code > span.co { color: #008000; }
+code > span.ot { color: #ff4000; }
+code > span.al { color: #ff0000; }
+code > span.er { font-weight: bold; }
+  </style>
+  <link rel="stylesheet" href="style/a.css">
+</head>
+<body>
+<h1 id="agml_gui-live-execution-monitoring-gui">agml_gui : Live execution monitoring GUI</h1>
+<figure>
+<img src="img/agml_gui.png" title="agml_gui" alt="agml_gui" /><figcaption>agml_gui</figcaption>
+</figure>
+<p><code>agml_gui</code> is a Graphical User Interface for monitoring and controlling the execution of a model. It is based on <a href="http://nwjs.io/">Node Webkit</a> and thus requires that Nodejs and Webkit be installed (most Linux distros provide packages for them).</p>
+<p><code>agml_gui</code> displays in a single window every remote <code>Hosts</code> currently involved in AGML computation and report runtime information about the corresponding <code>NodeGroup</code>s and individual <code>Node</code>s (iteration, emission and reception speeds).</p>
+<h2 id="connection-to-running-daemons">Connection to running daemons</h2>
+<p>For <code>agml_gui</code> to discover running daemons, one or more addresses must be entered in the <em>AGML Infos providers</em> field in the left panel. To declare a daemon, the format is as follows:</p>
+<pre class="sourceCode ini"><code class="sourceCode ini"><span class="dt">agmlinfo://ip:port</span></code></pre>
+<p><id>port</id> defaults to 10001 if omitted. Once added, information from <em>every</em> daemon connected to one of those specified in the <em>AGML Infos providers</em> field are automatically retrieved every second.</p>
+<blockquote>
+<p>libAGML takes care of inter-daemon communications to provide <code>agml_gui</code> with information from <em>all</em> daemons. The user only needs to connect to <em>one</em> daemon address.</p>
+</blockquote>
+<blockquote>
+<p>In order to enable transmission of <code>Node</code> information between <code>agmld</code> daemons (disabled by default to maximize computing performance), type in a shell: <code>$ agml &lt;deamon_ip:port&gt; start_infos</code></p>
+</blockquote>
+<blockquote>
+<p>Text entered in the various fields of <code>agml_gui</code> is persisted in the <code>/home/myuser/.agml</code> directory.</p>
+</blockquote>
+</body>
+</html>

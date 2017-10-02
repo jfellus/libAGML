@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="pandoc">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title></title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <!--[if lt IE 9]>
+    <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+  <![endif]-->
+  <style type="text/css">
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #0000ff; }
+code > span.ch { color: #008080; }
+code > span.st { color: #008080; }
+code > span.co { color: #008000; }
+code > span.ot { color: #ff4000; }
+code > span.al { color: #ff0000; }
+code > span.er { font-weight: bold; }
+  </style>
+  <link rel="stylesheet" href="style/a.css">
+</head>
+<body>
+<h1 id="agml-tutorial-2-kmeans-clustering-on-multiple-machines">AGML Tutorial 2 : KMeans clustering on multiple machines</h1>
+<p><em>Associed files: examples/kmeans_multiple_hosts.model, examples/kmeans_single_hosts.sh</em></p>
+<p>This tutorial presents how to run a gossip kmeans clustering on a multiple machines with <r>libAGML</r>.</p>
+<p>As an example, here we'll perform <a href="http://en.wikipedia.org/wiki/K-means_clustering">KMeans clustering</a>, whose objective is to optimize a Vector Quantizer from a set of training vectors. <r>libAGML</r> includes an asynchronous and decentralized implementation of KMeans, presented in <a href="bib.html">[KDCLOUD2013]</a>.</p>
+<p>It is strongly advised to first read <a href="tutorial_1.html">Tutorial 1</a>.</p>
+<h3 id="model-declaration">Model declaration</h3>
+<h4 id="declare-hosts">Declare hosts</h4>
+<p>We first declare two local hosts named <code>a</code> and <code>b</code> with port <em>10001</em> and <em>10002</em>. Both have 4 threads:</p>
+<pre class="sourceCode ini"><code class="sourceCode ini"><span class="dt">Host a </span><span class="ot">=</span><span class="st"> </span><span class="kw">localhost</span><span class="st">:</span><span class="dv">10001</span><span class="st"> </span><span class="dv">4</span>
+<span class="dt">Host b </span><span class="ot">=</span><span class="st"> </span><span class="kw">localhost</span><span class="st">:</span><span class="dv">10002</span><span class="st"> </span><span class="dv">4</span></code></pre>
+<p>Note that, for sake of simplicity, we declare two hosts on the same machine. To declare hosts on two different machines, replace <code>localhost</code> with two different machine network IPs.</p>
+<h4 id="declare-data-nodes">Declare data nodes</h4>
+<p>The declaration of data nodes is almost the as in previous tutorial, except that we tell the computing server that data nodes can be run on any host:</p>
+<pre class="sourceCode ini"><code class="sourceCode ini"><span class="dt">NodeDataFile my_data</span>
+<span class="dt">my_data.file </span><span class="ot">=</span><span class="st"> mnist.idx3-ubyte</span>
+<span class="dt">my_data @ * </span><span class="kw">[1]</span></code></pre>
+<p>&quot;<code>my_data @ * [1]</code>&quot; : the wildcard tells that instance of <code>my_data</code> can be created on any host. The folloing <code>[1]</code> tells that only one instance should be created on each host. In this example, we will have a total of 2 <code>my_data</code> instance, one on host <code>a</code>, and the other one on host <code>b</code>.</p>
+<h4 id="declare-kmeans-nodes">Declare kmeans nodes</h4>
+<p>The declaration of kmeans nodes is also almost the same as in the previous tutorial, except that instances can be created on any node:</p>
+<pre class="sourceCode ini"><code class="sourceCode ini"><span class="dt">NodeKMeans my_kmeans</span>
+<span class="dt">my_kmeans.K </span><span class="ot">=</span><span class="st"> </span><span class="dv">32</span>
+<span class="dt">my_kmeans.epsilon </span><span class="ot">=</span><span class="st"> </span><span class="fl">0.1</span>
+<span class="dt">my_kmeans.verbose </span><span class="ot">=</span><span class="st"> </span><span class="dv">1</span>
+<span class="dt">my_kmeans @ * </span><span class="kw">[10]</span></code></pre>
+<p>Using this declaration, 10 instances of <code>my_kmeans</code> are created on host <code>a</code>, and 10 instances of <code>my_kmeans</code> are created on host <code>b</code>.</p>
+<h4 id="declare-nodes-connections">Declare nodes connections</h4>
+<p>There is no changes regarding the nodes connections:</p>
+<pre class="sourceCode ini"><code class="sourceCode ini"><span class="dt">my_data -&gt; my_kmeans</span>
+<span class="dt">my_kmeans -&gt; my_kmeans</span></code></pre>
+<h4 id="final-model">Final model</h4>
+<p>All the previous declarations are presented here as a single block, and can be found in <em>examples/kmeans_multiple_host.model</em>:</p>
+<pre class="sourceCode ini"><code class="sourceCode ini"><span class="dt">Host a </span><span class="ot">=</span><span class="st"> </span><span class="kw">localhost</span><span class="st">:</span><span class="dv">10001</span><span class="st"> </span><span class="dv">4</span>
+<span class="dt">Host b </span><span class="ot">=</span><span class="st"> </span><span class="kw">localhost</span><span class="st">:</span><span class="dv">10002</span><span class="st"> </span><span class="dv">4</span>
+
+<span class="dt">NodeDataFile my_data</span>
+<span class="dt">my_data.file </span><span class="ot">=</span><span class="st"> mnist.idx3-ubyte</span>
+<span class="dt">my_data @ * </span><span class="kw">[1]</span>
+
+<span class="dt">NodeKMeans my_kmeans</span>
+<span class="dt">my_kmeans.K </span><span class="ot">=</span><span class="st"> </span><span class="dv">32</span>
+<span class="dt">my_kmeans.epsilon </span><span class="ot">=</span><span class="st"> </span><span class="fl">0.1</span>
+<span class="dt">my_kmeans.verbose </span><span class="ot">=</span><span class="st"> </span><span class="dv">1</span>
+<span class="dt">my_kmeans @ * </span><span class="kw">[10]</span>
+
+<span class="dt">my_data -&gt; my_kmeans</span>
+<span class="dt">my_kmeans -&gt; my_kmeans</span></code></pre>
+<h3 id="model-execution">Model execution</h3>
+<h4 id="shell-opening">Shell opening</h4>
+<p>First open two shells: one for host <code>a</code>, and another one for host <code>b</code>. We denote as <code>shella</code> the first shell, and as <code>shellb</code> the second one. In this example, we open shells on the same machine, but one can also open shells on two different machines, as long as the ips are correctly declared in the model file.</p>
+<h4 id="run-on-shellb">Run on shellb</h4>
+<p>Go to <code>shellb</code>, cd to the examples dir, and run a server with port 10002:</p>
+<pre class="sourceCode ini"><code class="sourceCode ini"><span class="dt">shellb$ cd examples</span>
+<span class="dt">shellb$ ../bin/agml_server_clustering -p 10002</span></code></pre>
+<h4 id="run-on-shella">Run on shella</h4>
+<p>Go to <code>shella</code>, cd to the examples dir, and run a server with port 10001 and the model file:</p>
+<pre class="sourceCode ini"><code class="sourceCode ini"><span class="dt">shellb$ cd examples</span>
+<span class="dt">shellb$ ../bin/agml_server_clustering -p 10001 model &quot;$(cat kmeans_multiple_host.model)&quot;</span></code></pre>
+<p>Note that only one node needs to get the model: other servers will be automatically charged with instrucitons declared in the model file.</p>
+<p>You will see both shell logging activity. After a while, both servers stop and the same data is saved. As in the previous example, one can see that all nodes have converge to very close cluster centers.</p>
+<h3 id="monitoring">Monitoring</h3>
+<p><em>...Under construction...</em></p>
+<h3 id="whats-next">What's next ?</h3>
+<p>Proceed with <a href="tutorial_3.html">Tutorial 3</a></p>
+</body>
+</html>
